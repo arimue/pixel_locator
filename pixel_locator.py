@@ -38,13 +38,14 @@ import os.path
 class GetLocationTool(QgsMapTool): #inherits QgsMapTool
     """Return point coordinate upon click."""
     
-    def __init__(self, iface):
+    def __init__(self, iface, dockwidget):
         """ Constructor"""
         
         QgsMapTool.__init__(self, iface.mapCanvas())
         self.iface = iface
         self.setCursor(Qt.WhatsThisCursor)
-
+        self.dockwidget = dockwidget
+        
     def canvasReleaseEvent(self, event): 
         #check active layer on every new click to check if it has changed
         self.layer = self.iface.activeLayer()
@@ -55,15 +56,23 @@ class GetLocationTool(QgsMapTool): #inherits QgsMapTool
         ext = self.layer.extent()
         xmin = ext.xMinimum()
         ymax = ext.yMaximum()
-        xres = self.layer.rasterUnitsPerPixelX()
-        yres = self.layer.rasterUnitsPerPixelY()
         
-        #convert to image coordinates
-        xcoord = abs(point.x() - xmin) / xres
-        ycoord = abs(point.y() - ymax) / yres
-
-        print(point.x(), point.y())
-        print(np.round(xcoord, 0), np.round(ycoord,0))
+        #make sure point is within active layer extent
+        if (point.x() >= xmin) and (point.x() <= ext.xMaximum()) and (point.y() >= ext.yMinimum()) and (point.y() <= ymax): 
+            xres = self.layer.rasterUnitsPerPixelX()
+            yres = self.layer.rasterUnitsPerPixelY()
+            
+            #convert to image coordinates
+            xcoord = abs(point.x() - xmin) / xres
+            ycoord = abs(point.y() - ymax) / yres
+            
+            #update text in dockwidget
+            self.dockwidget.xcoord.setText(f"   {int(np.round(xcoord, 0))}")
+            self.dockwidget.ycoord.setText(f"   {int(np.round(ycoord, 0))}")
+        
+        else:
+            self.dockwidget.xcoord.setText(" ")
+            self.dockwidget.ycoord.setText(" ")
 
 class PixelLocator:
     """QGIS Plugin Implementation."""
@@ -78,7 +87,7 @@ class PixelLocator:
         """
         # Save reference to the QGIS interface
         self.iface = iface
-
+        
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
@@ -268,10 +277,8 @@ class PixelLocator:
             
         self.canvas = self.iface.mapCanvas()
 
-        get_coordinates = GetLocationTool(self.iface)
+        get_coordinates = GetLocationTool(self.iface, self.dockwidget)
         self.canvas.setMapTool(get_coordinates)
 
-    #TODO: show pixel loc in doc, not in console
     #TODO: update cursor
     #TODO: show floating pixel location below cursor
-    #TODO: what if cursor is outside of layer extent? at least allow minus coords or return nothing
